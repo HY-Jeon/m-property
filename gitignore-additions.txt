@@ -1,0 +1,9 @@
+# Docker 로그 파일 (디렉토리 구조만 유지, 실제 로그는 제외)
+docker/nginx/logs/*
+!docker/nginx/logs/.gitkeep
+
+docker/mariadb/logs/*
+!docker/mariadb/logs/.gitkeep
+
+storage/logs/*
+!storage/logs/.gitignore
