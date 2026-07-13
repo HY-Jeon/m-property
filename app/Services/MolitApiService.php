@@ -27,6 +27,11 @@ class MolitApiService
 
         do {
             $page = $this->fetchPage($lawdCd, $dealYmd, $pageNo, $numOfRows);
+
+            if ($page['items'] === []) {
+                break;
+            }
+
             $items = array_merge($items, $page['items']);
             $pageNo++;
         } while (count($items) < $page['totalCount']);
