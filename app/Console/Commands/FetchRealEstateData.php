@@ -30,20 +30,27 @@ class FetchRealEstateData extends Command
             }
 
             $targetDongs = $region['target_dongs'];
-            $saved = 0;
+            $matched = array_values(array_filter(
+                $items,
+                static fn (array $item) => in_array($item['umdNm'] ?? '', $targetDongs, true)
+            ));
 
-            foreach ($items as $item) {
-                $legalDong = $item['법정동'] ?? '';
+            // 해제(취소) 신고 건은 원 거래와 동일한 핵심 필드를 공유한 채 cdealType만 채워져 별도 항목으로 내려온다.
+            // API 응답 순서와 무관하게 해제 여부가 항상 반영되도록 정상 건을 먼저 저장한 뒤 해제 건을 나중에 처리한다.
+            $normal = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') === ''));
+            $cancelled = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') !== ''));
 
-                if (! in_array($legalDong, $targetDongs, true)) {
-                    continue;
-                }
-
+            foreach ($normal as $item) {
                 $this->saveTransaction($lawdCd, $item);
-                $saved++;
             }
 
-            $this->info("[{$region['name']}] {$saved}건 저장 (대상 법정동: ".implode(', ', $targetDongs).')');
+            foreach ($cancelled as $item) {
+                $this->markCancelled($lawdCd, $item);
+            }
+
+            $saved = count($normal);
+            $cancelledCount = count($cancelled);
+            $this->info("[{$region['name']}] {$saved}건 저장, {$cancelledCount}건 해제 반영 (대상 법정동: ".implode(', ', $targetDongs).')');
 
             foreach ($targetDongs as $dong) {
                 $this->refreshMonthlyAggregate($lawdCd, $dong, $dealYmd);
@@ -58,28 +65,18 @@ class FetchRealEstateData extends Command
      */
     private function saveTransaction(string $lawdCd, array $item): void
     {
-        $legalDong = $item['법정동'];
-        $apartmentName = $item['아파트'] ?? '';
-        $jibun = $item['지번'] ?? null;
-        $exclusiveArea = (float) ($item['전용면적'] ?? 0);
-        $floor = isset($item['층']) && $item['층'] !== '' ? (int) $item['층'] : null;
-        $buildYear = isset($item['건축년도']) && $item['건축년도'] !== '' ? (int) $item['건축년도'] : null;
-        $dealDate = sprintf(
-            '%04d-%02d-%02d',
-            (int) ($item['년'] ?? 0),
-            (int) ($item['월'] ?? 0),
-            (int) ($item['일'] ?? 0)
-        );
-        $dealAmount = (int) str_replace(',', '', trim($item['거래금액'] ?? '0'));
-        $dealType = ($item['거래유형'] ?? '') !== '' ? $item['거래유형'] : null;
-        $isCancelled = ($item['해제여부'] ?? '') === 'O';
-
-        $rawHash = sha1(implode('|', [
-            $lawdCd, $legalDong, $apartmentName, $jibun, $exclusiveArea, $floor, $dealDate, $dealAmount,
-        ]));
+        $legalDong = $item['umdNm'];
+        $apartmentName = $item['aptNm'] ?? '';
+        $jibun = $item['jibun'] ?? null;
+        $exclusiveArea = (float) ($item['excluUseAr'] ?? 0);
+        $floor = isset($item['floor']) && $item['floor'] !== '' ? (int) $item['floor'] : null;
+        $buildYear = isset($item['buildYear']) && $item['buildYear'] !== '' ? (int) $item['buildYear'] : null;
+        $dealDate = $this->dealDate($item);
+        $dealAmount = $this->dealAmount($item);
+        $dealType = ($item['dealingGbn'] ?? '') !== '' ? $item['dealingGbn'] : null;
 
         Transaction::updateOrCreate(
-            ['raw_hash' => $rawHash],
+            ['raw_hash' => $this->naturalKeyHash($lawdCd, $item)],
             [
                 'region_code' => $lawdCd,
                 'legal_dong' => $legalDong,
@@ -91,9 +88,81 @@ class FetchRealEstateData extends Command
                 'deal_date' => $dealDate,
                 'deal_amount' => $dealAmount,
                 'deal_type' => $dealType,
-                'is_cancelled' => $isCancelled,
+                'is_cancelled' => false,
             ]
         );
+    }
+
+    /**
+     * 해제(취소) 신고 건: 원 거래와 동일한 자연키를 가진 기존 행을 찾아 취소 상태만 반영한다.
+     * 매칭되는 정상 건이 이번 조회 결과에 없다면(예: 원 계약월과 다른 시점에 해제 반영) 해당 필드만으로 새로 생성한다.
+     *
+     * @param  array<string, string>  $item
+     */
+    private function markCancelled(string $lawdCd, array $item): void
+    {
+        $rawHash = $this->naturalKeyHash($lawdCd, $item);
+
+        $updated = Transaction::where('raw_hash', $rawHash)->update(['is_cancelled' => true]);
+
+        if ($updated > 0) {
+            return;
+        }
+
+        Transaction::updateOrCreate(
+            ['raw_hash' => $rawHash],
+            [
+                'region_code' => $lawdCd,
+                'legal_dong' => $item['umdNm'],
+                'apartment_name' => $item['aptNm'] ?? '',
+                'jibun' => $item['jibun'] ?? null,
+                'exclusive_area' => (float) ($item['excluUseAr'] ?? 0),
+                'floor' => isset($item['floor']) && $item['floor'] !== '' ? (int) $item['floor'] : null,
+                'build_year' => isset($item['buildYear']) && $item['buildYear'] !== '' ? (int) $item['buildYear'] : null,
+                'deal_date' => $this->dealDate($item),
+                'deal_amount' => $this->dealAmount($item),
+                'deal_type' => ($item['dealingGbn'] ?? '') !== '' ? $item['dealingGbn'] : null,
+                'is_cancelled' => true,
+            ]
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $item
+     */
+    private function naturalKeyHash(string $lawdCd, array $item): string
+    {
+        return sha1(implode('|', [
+            $lawdCd,
+            $item['umdNm'],
+            $item['aptNm'] ?? '',
+            $item['jibun'] ?? null,
+            (float) ($item['excluUseAr'] ?? 0),
+            isset($item['floor']) && $item['floor'] !== '' ? (int) $item['floor'] : null,
+            $this->dealDate($item),
+            $this->dealAmount($item),
+        ]));
+    }
+
+    /**
+     * @param  array<string, string>  $item
+     */
+    private function dealDate(array $item): string
+    {
+        return sprintf(
+            '%04d-%02d-%02d',
+            (int) ($item['dealYear'] ?? 0),
+            (int) ($item['dealMonth'] ?? 0),
+            (int) ($item['dealDay'] ?? 0)
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $item
+     */
+    private function dealAmount(array $item): int
+    {
+        return (int) str_replace(',', '', trim($item['dealAmount'] ?? '0'));
     }
 
     private function refreshMonthlyAggregate(string $lawdCd, string $legalDong, string $yearMonth): void

@@ -8,7 +8,20 @@ use SimpleXMLElement;
 
 class MolitApiService
 {
-    private const ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
+    private const ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
+
+    /**
+     * data.go.kr WAF가 브라우저 특성이 없는 요청(기본 curl/HttpClient 등)을 차단하므로
+     * 최소한의 브라우저 유사 헤더를 함께 보낸다.
+     *
+     * @var array<string, string>
+     */
+    private const HEADERS = [
+        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language' => 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer' => 'https://www.data.go.kr/',
+    ];
 
     public function __construct(private readonly string $serviceKey)
     {
@@ -44,7 +57,7 @@ class MolitApiService
      */
     private function fetchPage(string $lawdCd, string $dealYmd, int $pageNo, int $numOfRows): array
     {
-        $response = Http::timeout(15)->get(self::ENDPOINT, [
+        $response = Http::withHeaders(self::HEADERS)->timeout(15)->get(self::ENDPOINT, [
             'serviceKey' => $this->serviceKey,
             'LAWD_CD' => $lawdCd,
             'DEAL_YMD' => $dealYmd,
