@@ -42,6 +42,7 @@ docker compose exec app php artisan migrate
 ```
 
 브라우저에서 `http://localhost:8080` 접속하여 확인합니다.
+데이터 확인 http://localhost:8080/transactions 접속
 
 ### 환경변수 설정 (.env 주요 항목)
 
@@ -84,9 +85,11 @@ docker/
 Laravel Scheduler를 사용하여 월 단위로 실거래가 데이터를 자동 수집합니다.
 
 ```php
-// app/Console/Kernel.php
-$schedule->command('realestate:fetch')->monthly();
+// routes/console.php
+Schedule::command('realestate:fetch')->monthlyOn(1, '03:00');
 ```
+
+수동 실행: `docker compose exec app php artisan realestate:fetch --month=YYYYMM` (month 생략 시 전월 기준)
 
 크론잡 실패 시 Telegram 또는 slack으로 알림을 받도록 구성되어 있습니다 (추후 추가 예정).
 
