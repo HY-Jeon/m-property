@@ -42,7 +42,7 @@ docker compose exec app php artisan migrate
 ```
 
 브라우저에서 `http://localhost:8080` 접속하여 확인합니다.
-데이터 확인 http://localhost:8080/transactions 접속
+데이터 확인 /transactions 접속
 
 ### 환경변수 설정 (.env 주요 항목)
 
