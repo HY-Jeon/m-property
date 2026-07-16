@@ -10,54 +10,126 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
-#[Signature('realestate:fetch {--month= : 조회할 계약월(YYYYMM), 기본값은 전월}')]
-#[Description('국토교통부 아파트매매 실거래자료를 수집해 대상 법정동만 저장하고 월별 집계를 갱신한다')]
+#[Signature('realestate:fetch
+    {--month= : 조회할 계약월(YYYYMM) 단일 지정. 생략 시 realestate.lookback_months 설정만큼 최근 개월을 모두 재조회}
+    {--from= : 백필 시작 계약월(YYYYMM). --to와 함께 여러 달을 한 번에 수집}
+    {--to= : 백필 종료 계약월(YYYYMM). 생략 시 --from과 동일한 한 달만 조회}')]
+#[Description('국토교통부 아파트매매 실거래자료를 수집해 대상 법정동만 저장하고 월별 집계를 갱신한다. 뒤늦게 등록되는 해제(취소) 신고를 놓치지 않도록 최근 개월을 매번 재조회한다')]
 class FetchRealEstateData extends Command
 {
     public function handle(MolitApiService $molit): int
     {
-        $dealYmd = $this->option('month') ?? Carbon::now()->subMonth()->format('Ym');
+        try {
+            $months = $this->targetMonths();
+        } catch (\InvalidArgumentException $e) {
+            $this->error($e->getMessage());
 
-        foreach (config('realestate.regions') as $lawdCd => $region) {
-            $this->info("[{$region['name']}] {$dealYmd} 실거래 자료 조회 중 (LAWD_CD={$lawdCd})");
+            return self::FAILURE;
+        }
 
-            try {
-                $items = $molit->fetchAll($lawdCd, $dealYmd);
-            } catch (\Throwable $e) {
-                $this->error("[{$region['name']}] 조회 실패: {$e->getMessage()}");
-
-                continue;
-            }
-
-            $targetDongs = $region['target_dongs'];
-            $matched = array_values(array_filter(
-                $items,
-                static fn (array $item) => in_array($item['umdNm'] ?? '', $targetDongs, true)
-            ));
-
-            // 해제(취소) 신고 건은 원 거래와 동일한 핵심 필드를 공유한 채 cdealType만 채워져 별도 항목으로 내려온다.
-            // API 응답 순서와 무관하게 해제 여부가 항상 반영되도록 정상 건을 먼저 저장한 뒤 해제 건을 나중에 처리한다.
-            $normal = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') === ''));
-            $cancelled = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') !== ''));
-
-            foreach ($normal as $item) {
-                $this->saveTransaction($lawdCd, $item);
-            }
-
-            foreach ($cancelled as $item) {
-                $this->markCancelled($lawdCd, $item);
-            }
-
-            $saved = count($normal);
-            $cancelledCount = count($cancelled);
-            $this->info("[{$region['name']}] {$saved}건 저장, {$cancelledCount}건 해제 반영 (대상 법정동: ".implode(', ', $targetDongs).')');
-
-            foreach ($targetDongs as $dong) {
-                $this->refreshMonthlyAggregate($lawdCd, $dong, $dealYmd);
+        foreach ($months as $dealYmd) {
+            foreach (config('realestate.regions') as $lawdCd => $region) {
+                $this->fetchRegionMonth($molit, (string) $lawdCd, $region, $dealYmd);
             }
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function targetMonths(): array
+    {
+        if ($from = $this->option('from')) {
+            return $this->monthRange($from, $this->option('to') ?? $from);
+        }
+
+        if ($month = $this->option('month')) {
+            $this->validateYearMonth($month);
+
+            return [$month];
+        }
+
+        $lookback = (int) config('realestate.lookback_months', 3);
+
+        return collect(range(1, $lookback))
+            ->map(fn (int $i) => Carbon::now()->subMonths($i)->format('Ym'))
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function monthRange(string $from, string $to): array
+    {
+        $this->validateYearMonth($from);
+        $this->validateYearMonth($to);
+
+        $start = Carbon::createFromFormat('Ym', $from)->startOfMonth();
+        $end = Carbon::createFromFormat('Ym', $to)->startOfMonth();
+
+        if ($end->lt($start)) {
+            [$start, $end] = [$end, $start];
+        }
+
+        $months = [];
+
+        for ($cursor = $start->copy(); $cursor->lte($end); $cursor->addMonth()) {
+            $months[] = $cursor->format('Ym');
+        }
+
+        return $months;
+    }
+
+    private function validateYearMonth(string $ym): void
+    {
+        if (! preg_match('/^\d{4}(0[1-9]|1[0-2])$/', $ym)) {
+            throw new \InvalidArgumentException("계약월 형식이 올바르지 않습니다(YYYYMM): {$ym}");
+        }
+    }
+
+    /**
+     * @param  array{name: string, target_dongs: array<int, string>}  $region
+     */
+    private function fetchRegionMonth(MolitApiService $molit, string $lawdCd, array $region, string $dealYmd): void
+    {
+        $this->info("[{$region['name']}] {$dealYmd} 실거래 자료 조회 중 (LAWD_CD={$lawdCd})");
+
+        try {
+            $items = $molit->fetchAll($lawdCd, $dealYmd);
+        } catch (\Throwable $e) {
+            $this->error("[{$region['name']}] {$dealYmd} 조회 실패: {$e->getMessage()}");
+
+            return;
+        }
+
+        $targetDongs = $region['target_dongs'];
+        $matched = array_values(array_filter(
+            $items,
+            static fn (array $item) => in_array($item['umdNm'] ?? '', $targetDongs, true)
+        ));
+
+        // 해제(취소) 신고 건은 원 거래와 동일한 핵심 필드를 공유한 채 cdealType만 채워져 별도 항목으로 내려온다.
+        // API 응답 순서와 무관하게 해제 여부가 항상 반영되도록 정상 건을 먼저 저장한 뒤 해제 건을 나중에 처리한다.
+        $normal = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') === ''));
+        $cancelled = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') !== ''));
+
+        foreach ($normal as $item) {
+            $this->saveTransaction($lawdCd, $item);
+        }
+
+        foreach ($cancelled as $item) {
+            $this->markCancelled($lawdCd, $item);
+        }
+
+        $saved = count($normal);
+        $cancelledCount = count($cancelled);
+        $this->info("[{$region['name']}] {$dealYmd}: {$saved}건 저장, {$cancelledCount}건 해제 반영 (대상 법정동: ".implode(', ', $targetDongs).')');
+
+        foreach ($targetDongs as $dong) {
+            $this->refreshMonthlyAggregate($lawdCd, $dong, $dealYmd);
+        }
     }
 
     /**
