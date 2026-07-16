@@ -114,6 +114,11 @@
                                 Deploy now
                             </a>
                         </li>
+                        <li>
+                            <a href="{{ url('/transactions') }}" class="inline-block bg-[#FDFDFC] dark:bg-[#161615] border border-[#e3e3e0] dark:border-[#3E3E3A] text-[#1b1b18] dark:text-[#EDEDEC] hover:border-[#19140035] rounded-sm px-5 py-1.5 text-sm leading-normal">
+                                거래 대시보드 보기
+                            </a>
+                        </li>
                     </ul>
 
                     <p class="mt-6 lg:mt-10 text-[#706f6c] dark:text-[#A1A09A]">
