@@ -27,8 +27,17 @@ class FetchRealEstateData extends Command
             return self::FAILURE;
         }
 
+        // 여러 달을 한 번에 백필/재조회할 때 요청이 연달아 몰리면 data.go.kr WAF의
+        // 순간 트래픽 차단에 걸릴 수 있어, 첫 요청을 제외하고 호출 사이에 짧은 간격을 둔다.
+        $isFirstRequest = true;
+
         foreach ($months as $dealYmd) {
             foreach (config('realestate.regions') as $lawdCd => $region) {
+                if (! $isFirstRequest) {
+                    usleep(500_000);
+                }
+                $isFirstRequest = false;
+
                 $this->fetchRegionMonth($molit, (string) $lawdCd, $region, $dealYmd);
             }
         }

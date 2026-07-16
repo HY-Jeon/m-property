@@ -39,6 +39,10 @@ class MolitApiService
         $items = [];
 
         do {
+            if ($pageNo > 1) {
+                usleep(500_000);
+            }
+
             $page = $this->fetchPage($lawdCd, $dealYmd, $pageNo, $numOfRows);
 
             if ($page['items'] === []) {
