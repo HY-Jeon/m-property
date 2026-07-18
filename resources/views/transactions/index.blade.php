@@ -107,6 +107,7 @@
                                 <th class="px-3 py-3 text-left font-semibold text-slate-700">아파트</th>
                                 <th class="px-3 py-3 text-right font-semibold text-slate-700">거래일</th>
                                 <th class="px-3 py-3 text-right font-semibold text-slate-700">금액</th>
+                                <th class="px-3 py-3 text-right font-semibold text-slate-700">Safe</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700">
@@ -116,6 +117,9 @@
                                     <td class="whitespace-nowrap px-3 py-3">{{ $t->apartment_name }}</td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">{{ $t->deal_date->format('Y-m-d') }}</td>
                                     <td class="whitespace-nowrap px-3 py-3 text-right">{{ number_format($t->deal_amount) }} 만원</td>
+                                    <td>@php $sg = app(\App\Services\SafeReportService::class)->quickGradeByBuildYear((int) $t->build_year); @endphp
+                                        <a href="/safety?q={{ urlencode($t->legal_dong . ' ' . $t->jibun) }}" title="재난위험 리포트 보기">{{ $sg }}</a>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>

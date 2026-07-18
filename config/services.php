@@ -39,4 +39,9 @@ return [
         'service_key' => env('MOLIT_API_SERVICE_KEY'),
     ],
 
+    'safereport' => [
+    'data_go_kr_key' => env('DATA_GO_KR_SERVICE_KEY', env('MOLIT_API_SERVICE_KEY')),
+    'juso_key'       => env('JUSO_API_KEY'),
+    ],
+
 ];
