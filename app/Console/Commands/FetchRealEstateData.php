@@ -42,25 +42,28 @@ class FetchRealEstateData extends Command
             }
         }
 
-        return self::SUCCESS;
-    }
+            $targetDongs = $region['target_dongs'];
+            $matched = array_values(array_filter(
+                $items,
+                static fn (array $item) => in_array($item['umdNm'] ?? '', $targetDongs, true)
+            ));
 
-    /**
-     * @return array<int, string>
-     */
-    private function targetMonths(): array
-    {
-        if ($from = $this->option('from')) {
-            return $this->monthRange($from, $this->option('to') ?? $from);
-        }
+            // 해제(취소) 신고 건은 원 거래와 동일한 핵심 필드를 공유한 채 cdealType만 채워져 별도 항목으로 내려온다.
+            // API 응답 순서와 무관하게 해제 여부가 항상 반영되도록 정상 건을 먼저 저장한 뒤 해제 건을 나중에 처리한다.
+            $normal = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') === ''));
+            $cancelled = array_values(array_filter($matched, static fn (array $item) => trim($item['cdealType'] ?? '') !== ''));
 
-        if ($month = $this->option('month')) {
-            $this->validateYearMonth($month);
+            foreach ($normal as $item) {
+                $this->saveTransaction($lawdCd, $item);
+            }
 
-            return [$month];
-        }
+            foreach ($cancelled as $item) {
+                $this->markCancelled($lawdCd, $item);
+            }
 
-        $lookback = (int) config('realestate.lookback_months', 3);
+            $saved = count($normal);
+            $cancelledCount = count($cancelled);
+            $this->info("[{$region['name']}] {$saved}건 저장, {$cancelledCount}건 해제 반영 (대상 법정동: ".implode(', ', $targetDongs).')');
 
         return collect(range(1, $lookback))
             ->map(fn (int $i) => Carbon::now()->subMonths($i)->format('Ym'))

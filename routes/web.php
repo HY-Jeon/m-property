@@ -10,4 +10,3 @@ Route::get('/', function () {
 });
 
 Route::get('/transactions', [TransactionController::class, 'index']);
-Route::get('/safety', [SafetyController::class, 'index']);
