@@ -1,4 +1,4 @@
-FROM php:8.3-fpm
+FROM php:8.5.12-fpm
 
 # 시스템 패키지 + PHP 확장에 필요한 라이브러리 설치
 RUN apt-get update && apt-get install -y \

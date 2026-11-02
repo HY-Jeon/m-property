@@ -11,7 +11,7 @@
 
 | 구분 | 기술 |
 |---|---|
-| 백엔드 | Laravel (PHP 8.3) |
+| 백엔드 | Laravel (PHP 8.5) |
 | 데이터베이스 | MariaDB 11.4 |
 | 캐시/세션 | Redis 7 |
 | 웹서버 | Nginx |

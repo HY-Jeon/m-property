@@ -4,7 +4,7 @@
 
 ## 최종 스택
 
-- Laravel (PHP 8.3-FPM)
+- Laravel (PHP 8.5-FPM)
 - Nginx 1.27
 - MariaDB 11.4
 - Redis 7
