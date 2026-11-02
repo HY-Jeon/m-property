@@ -8,4 +8,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('realestate:fetch')->monthlyOn(1, '03:00');
+Schedule::command('realestate:fetch')->monthlyOn(1, '03:00')->withoutOverlapping();

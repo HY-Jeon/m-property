@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SafetyController;
+
 
 Route::get('/', function () {
     return view('welcome');
