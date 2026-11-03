@@ -16,7 +16,7 @@
 | 캐시/세션 | Redis 7 |
 | 웹서버 | Nginx |
 | 프론트엔드 차트 | TradingView Lightweight Charts |
-| 인프라 | Docker Compose |
+| 인프라 | Docker Compose, Oracle Cloud Free Tier (VPS) |
 | 데이터 소스 | 공공데이터포털 - 국토교통부 아파트매매 실거래자료 |
 
 ## 로컬 개발 환경 실행
@@ -42,7 +42,7 @@ docker compose exec app php artisan migrate
 ```
 
 브라우저에서 `http://localhost:8080` 접속하여 확인합니다.
-데이터 확인 http://localhost:8080/transactions 접속
+데이터 확인 /transactions 접속
 
 ### 환경변수 설정 (.env 주요 항목)
 
