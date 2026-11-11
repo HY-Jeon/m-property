@@ -157,7 +157,14 @@ class TransactionStoreService
             ->selectRaw('COUNT(*) as count, AVG(deal_amount) as avg_amount, MIN(deal_amount) as min_amount, MAX(deal_amount) as max_amount')
             ->first();
 
-        if (! $stats || $stats->count === 0) {
+        // 유효 거래가 모두 해제되는 등 0건이 되면 이전 집계가 남지 않도록 해당 월 집계 행을 삭제한다.
+        if ((int) $stats->count === 0) {
+            MonthlyAggregate::query()
+                ->where('region_code', $lawdCd)
+                ->where('legal_dong', $legalDong)
+                ->where('year_month', $yearMonth)
+                ->delete();
+
             return;
         }
 
