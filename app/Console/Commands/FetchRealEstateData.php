@@ -8,6 +8,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 #[Signature('realestate:fetch
     {--month= : 조회할 계약월(YYYYMM) 단일 지정. 생략 시 realestate.lookback_months 설정만큼 최근 개월을 모두 재조회}
@@ -30,6 +31,9 @@ class FetchRealEstateData extends Command
         // 순간 트래픽 차단에 걸릴 수 있어, 첫 요청을 제외하고 호출 사이에 짧은 간격을 둔다.
         $isFirstRequest = true;
 
+        // 한 지역/월이 실패해도 나머지는 계속 수집하되, 스케줄러가 실패를 감지할 수 있도록 종료 코드에 반영한다.
+        $hasFailure = false;
+
         foreach ($months as $dealYmd) {
             foreach (config('realestate.regions') as $lawdCd => $region) {
                 if (! $isFirstRequest) {
@@ -37,11 +41,13 @@ class FetchRealEstateData extends Command
                 }
                 $isFirstRequest = false;
 
-                $this->fetchRegionMonth($molit, $store, (string) $lawdCd, $region, $dealYmd);
+                if (! $this->fetchRegionMonth($molit, $store, (string) $lawdCd, $region, $dealYmd)) {
+                    $hasFailure = true;
+                }
             }
         }
 
-        return self::SUCCESS;
+        return $hasFailure ? self::FAILURE : self::SUCCESS;
     }
 
     /**
@@ -99,8 +105,9 @@ class FetchRealEstateData extends Command
 
     /**
      * @param  array{name: string, target_dongs: array<int, string>}  $region
+     * @return bool 조회에 성공하면 true
      */
-    private function fetchRegionMonth(MolitApiService $molit, TransactionStoreService $store, string $lawdCd, array $region, string $dealYmd): void
+    private function fetchRegionMonth(MolitApiService $molit, TransactionStoreService $store, string $lawdCd, array $region, string $dealYmd): bool
     {
         $this->info("[{$region['name']}] {$dealYmd} 실거래 자료 조회 중 (LAWD_CD={$lawdCd})");
 
@@ -109,7 +116,14 @@ class FetchRealEstateData extends Command
         } catch (\Throwable $e) {
             $this->error("[{$region['name']}] {$dealYmd} 조회 실패: {$e->getMessage()}");
 
-            return;
+            Log::error('실거래 자료 조회 실패', [
+                'region' => $region['name'],
+                'lawd_cd' => $lawdCd,
+                'deal_ymd' => $dealYmd,
+                'exception' => $e,
+            ]);
+
+            return false;
         }
 
         $targetDongs = $region['target_dongs'];
@@ -122,5 +136,7 @@ class FetchRealEstateData extends Command
         $result = $store->storeMonth($lawdCd, $dealYmd, $matched, $targetDongs);
 
         $this->info("[{$region['name']}] {$dealYmd}: {$result['saved']}건 저장, {$result['cancelled']}건 해제 반영 (대상 법정동: ".implode(', ', $targetDongs).')');
+
+        return true;
     }
 }

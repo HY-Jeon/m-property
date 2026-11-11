@@ -7,6 +7,7 @@ use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\Concerns\BuildsMolitXml;
 use Tests\TestCase;
 
@@ -57,5 +58,29 @@ class FetchRealEstateDataCommandTest extends TestCase
         $this->assertEqualsCanonicalizing(['교문동', '장안동'], Transaction::pluck('legal_dong')->all());
         $this->assertEqualsCanonicalizing(['교문동', '장안동'], MonthlyAggregate::pluck('legal_dong')->all());
         $this->assertSame(0, Transaction::whereIn('legal_dong', ['인창동', '휘경동'])->count());
+    }
+
+    public function test_returns_failure_and_logs_error_when_any_region_fails(): void
+    {
+        Log::spy();
+
+        Http::fake(function (Request $request) {
+            return match ($request['LAWD_CD']) {
+                '41310' => Http::response('server error', 500),
+                '11230' => Http::response($this->molitXml([
+                    $this->molitItem(['umdNm' => '장안동']),
+                ])),
+            };
+        });
+
+        $this->artisan('realestate:fetch', ['--month' => '202609'])->assertFailed();
+
+        // 실패한 지역이 있어도 나머지 지역은 계속 저장된다.
+        $this->assertSame(['장안동'], Transaction::pluck('legal_dong')->all());
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(fn (string $message, array $context) => $context['lawd_cd'] === '41310'
+                && $context['deal_ymd'] === '202609');
     }
 }
