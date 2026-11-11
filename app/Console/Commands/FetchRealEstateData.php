@@ -41,9 +41,7 @@ class FetchRealEstateData extends Command
                 }
                 $isFirstRequest = false;
 
-                if (! $this->fetchRegionMonth($molit, $store, (string) $lawdCd, $region, $dealYmd)) {
-                    $hasFailure = true;
-                }
+                $this->fetchRegionMonth($molit, $store, (string) $lawdCd, $region, $dealYmd);
             }
         }
 
