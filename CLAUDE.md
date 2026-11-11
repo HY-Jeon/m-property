@@ -5,7 +5,7 @@
 시세 추이를 차트/테이블로 보여주는 서비스. 개인 사이드 프로젝트, MVP 단계.
 
 ## 기술 스택
-- Laravel (PHP 8.3-FPM)
+- Laravel (PHP 8.5-FPM)
 - MariaDB 11.4 (SingleStore 아님 — 비용 절감을 위해 MariaDB로 결정)
 - Redis 7 (세션/캐시)
 - Nginx
