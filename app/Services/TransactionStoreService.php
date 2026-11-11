@@ -16,9 +16,10 @@ class TransactionStoreService
      * 한 지역·한 계약월의 API 응답 전체를 저장하고 월별 집계를 갱신한다.
      *
      * @param  array<int, array<string, string>>  $items
+     * @param  array<int, string>|null  $aggregateDongs  집계를 갱신할 법정동 목록. 생략하면 items에 포함된 법정동을 사용한다.
      * @return array{saved: int, cancelled: int}
      */
-    public function storeMonth(string $lawdCd, string $dealYmd, array $items): array
+    public function storeMonth(string $lawdCd, string $dealYmd, array $items, ?array $aggregateDongs = null): array
     {
         // 해제(취소) 신고 건은 cdealType만 채워져 별도 항목으로 내려온다.
         // 정상 건을 먼저 저장한 뒤 해제 건을 나중에 처리해 순서와 무관하게 반영되도록 한다.
@@ -33,7 +34,7 @@ class TransactionStoreService
             $this->markCancelled($lawdCd, $item);
         }
 
-        foreach ($this->distinctDongs($items) as $dong) {
+        foreach ($aggregateDongs ?? $this->distinctDongs($items) as $dong) {
             $this->refreshMonthlyAggregate($lawdCd, $dong, $dealYmd);
         }
 
