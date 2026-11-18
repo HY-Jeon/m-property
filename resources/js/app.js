@@ -1,4 +1,5 @@
 import { createChart } from 'lightweight-charts';
+import './ad-tracking';
 
 window.realestateChartData = window.realestateChartData ?? {};
 

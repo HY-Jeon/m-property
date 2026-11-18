@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>실거래가 대시보드</title>
+    <meta name="tracker-endpoint" content="{{ config('services.tracker.endpoint') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
@@ -42,6 +43,16 @@
                 <p class="mt-2 text-sm text-slate-600">데이터가 수집된 법정동 수</p>
             </div>
         </div>
+
+        @php $banner = config('ads.main_banner'); @endphp
+        @if ($banner['enabled'] && $banner['image'])
+            <aside data-ad-slot data-ad-id="{{ $banner['id'] }}" class="relative mt-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <span class="absolute right-3 top-3 rounded bg-slate-900/60 px-2 py-0.5 text-xs text-white">광고</span>
+                <a href="{{ $banner['link'] ?: '#' }}" target="_blank" rel="noopener sponsored" class="block">
+                    <img src="{{ $banner['image'] }}" alt="{{ $banner['alt'] }}" class="block h-auto w-full" loading="lazy">
+                </a>
+            </aside>
+        @endif
 
         <section class="mt-10 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
