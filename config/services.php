@@ -44,4 +44,8 @@ return [
     'juso_key'       => env('JUSO_API_KEY'),
     ],
 
+    'tracker' => [
+        'endpoint' => env('TRACKER_ENDPOINT'),
+    ],
+
 ];
